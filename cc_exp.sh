@@ -20,8 +20,8 @@ cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p slurm/logs
 
 # Environment
-module --force purge
-module load StdEnv/2023 gcc/12.3
+# module --force purge
+# module load StdEnv/2023 gcc/12.3
 
 source ~/ENV/rl/bin/activate
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
