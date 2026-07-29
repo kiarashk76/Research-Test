@@ -6,7 +6,7 @@
 #SBATCH --time=00:30:00
 #SBATCH --mem=2G
 #SBATCH --cpus-per-task=1
-#SBATCH --account=aip-lelis
+#SBATCH --account=def-lelis
 
 set -u
 
