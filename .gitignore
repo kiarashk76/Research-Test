@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Experiment outputs
+results/
+
+# Slurm logs
+slurm/logs/*
+!slurm/logs/.gitkeep
+
+# Local/editor noise
+.DS_Store
+.vscode/
+.idea/
