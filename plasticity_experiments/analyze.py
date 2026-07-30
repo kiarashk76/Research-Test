@@ -7,6 +7,8 @@ import pandas as pd
 import yaml
 
 from analysis.metrics import (
+    activation_erank_by_eval_step,
+    dormant_neuron_fraction_by_eval_step,
     eval_mse_auc_by_task,
     eval_mse_by_eval_step,
     latest_eval_mse_by_task,
@@ -14,6 +16,8 @@ from analysis.metrics import (
     steps_to_mse_threshold_by_task,
 )
 from analysis.plots import (
+    plot_activation_erank_by_eval_step,
+    plot_dormant_neuron_fraction_by_eval_step,
     plot_eval_mse_auc_by_task,
     plot_eval_mse_by_eval_step,
     plot_latest_eval_mse_by_task,
@@ -35,6 +39,8 @@ PLOT_NAMES = [
     "eval_mse_by_eval_step",
     "eval_mse_auc_by_task",
     "steps_to_mse_threshold_by_task",
+    "activation_erank_by_eval_step",
+    "dormant_neuron_fraction_by_eval_step",
 ]
 
 
@@ -147,6 +153,30 @@ def run_supervised_analysis(
         output_paths.extend([threshold_steps_csv, threshold_steps_plot])
         print(f"Steps-to-threshold uses Eval MSE <= {mse_threshold:g}.")
         print_table("Steps To MSE Threshold By Task", threshold_steps)
+
+    if plot_flags["activation_erank_by_eval_step"]:
+        try:
+            erank = activation_erank_by_eval_step(df)
+        except ValueError as error:
+            print(f"Skipping activation_erank_by_eval_step: {error}")
+        else:
+            erank_csv = output_dir / "activation_erank_by_eval_step.csv"
+            erank_plot = output_dir / "activation_erank_by_eval_step.png"
+            erank.to_csv(erank_csv, index=False)
+            plot_activation_erank_by_eval_step(erank, erank_plot)
+            output_paths.extend([erank_csv, erank_plot])
+
+    if plot_flags["dormant_neuron_fraction_by_eval_step"]:
+        try:
+            dormant = dormant_neuron_fraction_by_eval_step(df)
+        except ValueError as error:
+            print(f"Skipping dormant_neuron_fraction_by_eval_step: {error}")
+        else:
+            dormant_csv = output_dir / "dormant_neuron_fraction_by_eval_step.csv"
+            dormant_plot = output_dir / "dormant_neuron_fraction_by_eval_step.png"
+            dormant.to_csv(dormant_csv, index=False)
+            plot_dormant_neuron_fraction_by_eval_step(dormant, dormant_plot)
+            output_paths.extend([dormant_csv, dormant_plot])
 
     print("\nSaved outputs:")
     for path in output_paths:

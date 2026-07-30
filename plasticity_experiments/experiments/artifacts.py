@@ -85,23 +85,27 @@ def save_supervised_eval_artifact(
     step_within_task: int,
     global_step: int,
     metadata: dict[str, Any] | None = None,
-) -> tuple[str, float]:
+) -> tuple[str, float, dict[str, float]]:
     artifact_config = config.get("artifacts", {})
+    analysis_config = config.get("analysis", {})
+    dormant_threshold = activation_dormant_threshold(analysis_config)
     if not artifact_config.get("enabled", False):
-        mse = compute_supervised_mse(
+        mse, activation_metrics = compute_supervised_mse_and_activation_metrics(
             network=network,
             eval_inputs=eval_inputs,
             eval_targets=eval_targets,
+            dormant_threshold=dormant_threshold,
         )
-        return "", mse
+        return "", mse, activation_metrics
 
-    mse, activations, gradients = compute_full_dataset_supervised_metrics(
+    mse, activations, gradients, activation_metrics = compute_full_dataset_supervised_metrics(
         network=network,
         eval_inputs=eval_inputs,
         eval_targets=eval_targets,
         save_activations=artifact_config.get("save_activations", True),
         save_gradients=artifact_config.get("save_gradients", True),
         max_activation_examples=artifact_config.get("max_activation_examples"),
+        dormant_threshold=dormant_threshold,
     )
 
     artifact_dir = Path(run_dir) / "artifacts" / f"seed_{seed}" / actor
@@ -121,6 +125,7 @@ def save_supervised_eval_artifact(
             **(metadata or {}),
         },
         "mse": mse,
+        "activation_metrics": activation_metrics,
     }
 
     if artifact_config.get("save_weights", True):
@@ -136,23 +141,28 @@ def save_supervised_eval_artifact(
         payload["activations"] = activations
 
     torch.save(payload, artifact_path)
-    return str(artifact_path), mse
+    return str(artifact_path), mse, activation_metrics
 
 
-def compute_supervised_mse(
+def compute_supervised_mse_and_activation_metrics(
     *,
     network: nn.Module,
     eval_inputs: torch.Tensor,
     eval_targets: torch.Tensor,
-) -> float:
+    dormant_threshold: float,
+) -> tuple[float, dict[str, float]]:
     was_training = network.training
     network.eval()
     with torch.no_grad():
-        predictions = network(eval_inputs)
+        predictions, hidden_activations = network(eval_inputs, return_activations=True)
         mse = float(F.mse_loss(predictions, eval_targets).item())
+        activation_metrics = compute_activation_metrics(
+            hidden_activations,
+            dormant_threshold=dormant_threshold,
+        )
     if was_training:
         network.train()
-    return mse
+    return mse, activation_metrics
 
 
 def compute_full_dataset_supervised_metrics(
@@ -163,7 +173,13 @@ def compute_full_dataset_supervised_metrics(
     save_activations: bool,
     save_gradients: bool,
     max_activation_examples: int | None = None,
-) -> tuple[float, dict[str, Any] | None, dict[str, torch.Tensor | None] | None]:
+    dormant_threshold: float = 0.01,
+) -> tuple[
+    float,
+    dict[str, Any] | None,
+    dict[str, torch.Tensor | None] | None,
+    dict[str, float],
+]:
     was_training = network.training
     network.eval()
     network.zero_grad(set_to_none=True)
@@ -171,6 +187,10 @@ def compute_full_dataset_supervised_metrics(
     outputs, hidden_activations = network(eval_inputs, return_activations=True)
     loss = F.mse_loss(outputs, eval_targets)
     mse = float(loss.detach().item())
+    activation_metrics = compute_activation_metrics(
+        hidden_activations,
+        dormant_threshold=dormant_threshold,
+    )
 
     gradients = None
     if save_gradients:
@@ -209,7 +229,57 @@ def compute_full_dataset_supervised_metrics(
     if was_training:
         network.train()
 
-    return mse, activations, gradients
+    return mse, activations, gradients, activation_metrics
+
+
+def compute_activation_metrics(
+    hidden_activations: list[torch.Tensor],
+    dormant_threshold: float,
+) -> dict[str, float]:
+    metrics: dict[str, float] = {
+        "activation_dormant_threshold": float(dormant_threshold),
+    }
+    for layer_index, activation in enumerate(hidden_activations):
+        values = activation.detach()
+        layer_width = int(values.shape[1]) if values.ndim == 2 else int(values.numel())
+        effective_rank = activation_effective_rank(values)
+        normalized_effective_rank = effective_rank / max(layer_width, 1)
+        mean_abs_activation = values.abs().mean(dim=0)
+        active_per_neuron = values.abs().sum(dim=0)
+
+        prefix = f"layer_{layer_index}"
+        metrics[f"{prefix}_width"] = float(layer_width)
+        metrics[f"{prefix}_effective_rank"] = effective_rank
+        metrics[f"{prefix}_normalized_effective_rank"] = normalized_effective_rank
+        metrics[f"{prefix}_dormant_fraction"] = float(
+            (mean_abs_activation < dormant_threshold).float().mean().item()
+        )
+        metrics[f"{prefix}_zero_activation_fraction"] = float(
+            (values == 0).float().mean().item()
+        )
+        metrics[f"{prefix}_never_active_fraction"] = float(
+            (active_per_neuron == 0).float().mean().item()
+        )
+    return metrics
+
+
+def activation_effective_rank(activation: torch.Tensor) -> float:
+    centered = activation - activation.mean(dim=0, keepdim=True)
+    singular_values = torch.linalg.svdvals(centered.float())
+    total = singular_values.sum()
+    if float(total.item()) <= 0.0:
+        return 0.0
+    probabilities = singular_values / total
+    probabilities = probabilities[probabilities > 0]
+    entropy = -(probabilities * torch.log(probabilities)).sum()
+    return float(torch.exp(entropy).item())
+
+
+def activation_dormant_threshold(analysis_config: dict) -> float:
+    config = analysis_config.get("dormant_neuron_fraction_by_eval_step", {})
+    if isinstance(config, dict):
+        return float(config.get("activation_threshold", 0.01))
+    return 0.01
 
 
 def capture_activations(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import pandas as pd
 
@@ -68,6 +69,66 @@ def eval_mse_by_eval_step(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
         .sort_values(["run_label", "intervention_type", "eval_step"])
     )
+
+
+def activation_erank_by_eval_step(df: pd.DataFrame) -> pd.DataFrame:
+    layer_df = activation_layer_metric_rows(
+        df,
+        [
+            "effective_rank",
+            "normalized_effective_rank",
+            "width",
+        ],
+    )
+    return (
+        layer_df.groupby(["run_label", "intervention_type", "layer_index", "eval_step"])
+        .agg(
+            task_index=("task_index", "first"),
+            global_update_mean=("global_update", "mean"),
+            normalized_effective_rank_mean=("normalized_effective_rank", "mean"),
+            normalized_effective_rank_sem=("normalized_effective_rank", "sem"),
+            effective_rank_mean=("effective_rank", "mean"),
+            width=("width", "first"),
+            n_seeds=("seed", "nunique"),
+        )
+        .reset_index()
+        .sort_values(["run_label", "intervention_type", "layer_index", "eval_step"])
+    )
+
+
+def dormant_neuron_fraction_by_eval_step(df: pd.DataFrame) -> pd.DataFrame:
+    layer_df = activation_layer_metric_rows(
+        df,
+        [
+            "dormant_fraction",
+            "zero_activation_fraction",
+            "never_active_fraction",
+        ],
+    )
+    threshold = (
+        float(df["activation_dormant_threshold"].dropna().iloc[0])
+        if "activation_dormant_threshold" in df.columns
+        and not df["activation_dormant_threshold"].dropna().empty
+        else 0.01
+    )
+    result = (
+        layer_df.groupby(["run_label", "intervention_type", "layer_index", "eval_step"])
+        .agg(
+            task_index=("task_index", "first"),
+            global_update_mean=("global_update", "mean"),
+            dormant_fraction_mean=("dormant_fraction", "mean"),
+            dormant_fraction_sem=("dormant_fraction", "sem"),
+            zero_activation_fraction_mean=("zero_activation_fraction", "mean"),
+            zero_activation_fraction_sem=("zero_activation_fraction", "sem"),
+            never_active_fraction_mean=("never_active_fraction", "mean"),
+            never_active_fraction_sem=("never_active_fraction", "sem"),
+            n_seeds=("seed", "nunique"),
+        )
+        .reset_index()
+        .sort_values(["run_label", "intervention_type", "layer_index", "eval_step"])
+    )
+    result["activation_threshold"] = threshold
+    return result
 
 
 def eval_mse_auc_by_task(df: pd.DataFrame) -> pd.DataFrame:
@@ -155,3 +216,38 @@ def trapezoid_area(x_values: list[float], y_values: list[float]) -> float:
         height = (float(y_values[i]) + float(y_values[i - 1])) / 2.0
         area += width * height
     return area
+
+
+def activation_layer_metric_rows(
+    df: pd.DataFrame,
+    metric_names: list[str],
+) -> pd.DataFrame:
+    layer_indices = sorted(
+        {
+            int(match.group(1))
+            for column in df.columns
+            if (match := re.fullmatch(r"layer_(\d+)_" + metric_names[0], column))
+        }
+    )
+    if not layer_indices:
+        raise ValueError(
+            f"No activation metric columns found for layer_*_{metric_names[0]}."
+        )
+
+    rows = []
+    base_columns = [
+        "run_label",
+        "intervention_type",
+        "seed",
+        "task_index",
+        "global_update",
+        "eval_step",
+    ]
+    for _, source in df.iterrows():
+        base = {column: source[column] for column in base_columns}
+        for layer_index in layer_indices:
+            row = {**base, "layer_index": layer_index}
+            for metric_name in metric_names:
+                row[metric_name] = source[f"layer_{layer_index}_{metric_name}"]
+            rows.append(row)
+    return pd.DataFrame(rows)

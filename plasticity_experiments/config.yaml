@@ -1,8 +1,8 @@
-experiment: rl
+experiment: supervised
 seeds: [0, 1, 2, 3, 4]
 
 network:
-  hidden_sizes: [64, 64]
+  hidden_sizes: [64]
   activation: relu
 
 intervention:
@@ -13,9 +13,9 @@ intervention:
 
 artifacts:
   enabled: true
-  save_weights: true
-  save_gradients: true
-  save_activations: true
+  save_weights: false
+  save_gradients: false
+  save_activations: false
   max_activation_examples: null
 
 task_data:
@@ -29,7 +29,11 @@ analysis:
   eval_mse_auc_by_task: true
   steps_to_mse_threshold_by_task:
     enabled: true
-    mse_threshold: 0.01
+    mse_threshold: 0.05
+  activation_erank_by_eval_step: true
+  dormant_neuron_fraction_by_eval_step:
+    enabled: true
+    activation_threshold: 0.01
 
 supervised:
   num_inputs: 100

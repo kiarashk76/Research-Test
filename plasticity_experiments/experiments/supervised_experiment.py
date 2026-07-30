@@ -79,7 +79,7 @@ def run_supervised_experiment(config: dict) -> dict:
                 continue
 
             x_eval, y_eval = task.get_evaluation_data()
-            artifact_path, mse = save_supervised_eval_artifact(
+            artifact_path, mse, activation_metrics = save_supervised_eval_artifact(
                 config=config,
                 run_dir=output_dir,
                 seed=seed,
@@ -96,20 +96,20 @@ def run_supervised_experiment(config: dict) -> dict:
                     "num_neurons_reset": reset_count,
                 },
             )
-            rows.append(
-                {
-                    "seed": seed,
-                    "task_index": task_index,
-                    "update_within_task": update,
-                    "global_update": global_update,
-                    "model": intervention_type,
-                    "train_loss": train_metrics["train_loss"],
-                    "eval_loss": mse,
-                    "intervention_type": intervention_type,
-                    "num_neurons_reset": reset_count,
-                    "artifact_path": artifact_path,
-                }
-            )
+            row = {
+                "seed": seed,
+                "task_index": task_index,
+                "update_within_task": update,
+                "global_update": global_update,
+                "model": intervention_type,
+                "train_loss": train_metrics["train_loss"],
+                "eval_loss": mse,
+                "intervention_type": intervention_type,
+                "num_neurons_reset": reset_count,
+                "artifact_path": artifact_path,
+            }
+            row.update(activation_metrics)
+            rows.append(row)
 
     csv_path = output_dir / f"seed_{seed}.csv"
     pd.DataFrame(rows).to_csv(csv_path, index=False)

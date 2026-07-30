@@ -212,7 +212,7 @@ to store activations for only the first N eval examples/states.
 ## Analysis
 
 Analysis is currently focused on supervised runs and reads the saved seed CSV
-files. It writes four seed-averaged metrics/plots:
+files. It writes seed-averaged metrics/plots:
 
 - `latest_eval_mse_by_task`: y-axis is latest eval MSE in each task, x-axis is
   task number.
@@ -223,6 +223,13 @@ files. It writes four seed-averaged metrics/plots:
 - `steps_to_mse_threshold_by_task`: y-axis is the first training step within a
   task where eval MSE reaches the configured threshold, x-axis is task number.
   The threshold comes from this plot's nested config.
+- `activation_erank_by_eval_step`: y-axis is normalized effective
+  representation rank for each hidden layer, x-axis is eval step.
+- `dormant_neuron_fraction_by_eval_step`: y-axis is the fraction of neurons
+  whose mean absolute activation on the full eval dataset is below the configured
+  threshold, x-axis is eval step.
+  The matching CSV also logs zero-activation fraction and never-active-neuron
+  fraction for ReLU-style diagnostics.
 
 ```yaml
 analysis:
@@ -232,6 +239,10 @@ analysis:
   steps_to_mse_threshold_by_task:
     enabled: true
     mse_threshold: 0.01
+  activation_erank_by_eval_step: true
+  dormant_neuron_fraction_by_eval_step:
+    enabled: true
+    activation_threshold: 0.01
 ```
 
 Set any plot flag to `false` to skip that metric/plot during automatic analysis
@@ -261,6 +272,10 @@ eval_mse_auc_by_task.csv
 eval_mse_auc_by_task.png
 steps_to_mse_threshold_by_task.csv
 steps_to_mse_threshold_by_task.png
+activation_erank_by_eval_step.csv
+activation_erank_by_eval_step.png
+dormant_neuron_fraction_by_eval_step.csv
+dormant_neuron_fraction_by_eval_step.png
 ```
 
 Compare multiple runs in one plot:
@@ -288,6 +303,8 @@ Python usage:
 
 ```python
 from analysis.metrics import (
+    activation_erank_by_eval_step,
+    dormant_neuron_fraction_by_eval_step,
     eval_mse_auc_by_task,
     eval_mse_by_eval_step,
     latest_eval_mse_by_task,
@@ -300,6 +317,8 @@ latest = latest_eval_mse_by_task(df)
 curve = eval_mse_by_eval_step(df)
 auc = eval_mse_auc_by_task(df)
 steps = steps_to_mse_threshold_by_task(df, mse_threshold=0.01)
+erank = activation_erank_by_eval_step(df)
+dormant = dormant_neuron_fraction_by_eval_step(df)
 ```
 
 ## Adding New Ideas
