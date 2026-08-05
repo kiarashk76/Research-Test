@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 
 # Experiment outputs
-results/
+outputs/
 
 # Slurm logs
 slurm/logs/*
