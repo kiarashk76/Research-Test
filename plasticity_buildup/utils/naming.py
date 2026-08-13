@@ -9,12 +9,16 @@ def _dims(value):
 
 def make_experiment_directory(config, root="outputs"):
     x_label = "xreset" if config["reset_x"] else "xfixed"
+    optimizer = config.get("optimizer", "adam")
+    optimizer_label = f"{optimizer}_lr{config['learning_rate']}"
+    if optimizer.lower() in {"sgd_momentum", "sgd+momentum", "momentum"}:
+        optimizer_label = f"{optimizer}_momentum{config.get('momentum', 0.9)}_lr{config['learning_rate']}"
     path = os.path.join(
         root,
         f"{config['dataset']}_{x_label}",
         f"in{config['input_dim']}_h{_dims(config['hidden_dims'])}_out{config['output_dim']}",
         f"samples{config['num_samples']}_tasks{config['num_tasks']}_epochs{config['num_epochs_per_task']}",
-        f"{config.get('optimizer', 'adam')}_lr{config['learning_rate']}",
+        optimizer_label,
     )
     os.makedirs(path, exist_ok=True)
     return path

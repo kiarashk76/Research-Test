@@ -12,7 +12,18 @@ except ImportError:
 
 # Edit these lists when producing a focused comparison. None means all available.
 EXPERIMENT_DIR = None
-METHODS_TO_PLOT = ["continual", "reset_optimizer", "fresh"]
+METHODS_TO_PLOT = [
+    "backprop",
+    "reset_optimizer",
+    "fresh",
+    "random_reset",
+    "low_gradient_reset",
+    "redo",
+    "continual_backprop",
+    "shrink_and_perturb",
+    "l2",
+    "l2_init",
+]
 METRICS_TO_PLOT = None
 
 

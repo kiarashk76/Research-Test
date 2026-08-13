@@ -3,6 +3,8 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
+from .scales import apply_metric_y_scale
+
 
 def _selected_methods(method_results, methods, selected_methods):
     names = selected_methods or list(method_results)
@@ -50,6 +52,7 @@ def plot_all_global_metrics(method_results, methods, metrics, save_dir, selected
                 labels.append(label)
         axis.set_title(metrics[metric_name]["label"])
         axis.set_ylabel(metrics[metric_name]["label"])
+        apply_metric_y_scale(axis, metric_name)
     for axis in axes[len(metric_names):]:
         axis.remove()
     for metric_index, axis in enumerate(axes[:len(metric_names)]):
@@ -91,6 +94,7 @@ def plot_all_metrics_for_layer(layer_name, method_results, methods, metrics, sav
                 labels.append(label)
         axis.set_title(metrics[metric_name]["label"])
         axis.set_ylabel(metrics[metric_name]["label"])
+        apply_metric_y_scale(axis, metric_name)
     for axis in axes[len(available):]:
         axis.remove()
     for metric_index, axis in enumerate(axes[:len(available)]):

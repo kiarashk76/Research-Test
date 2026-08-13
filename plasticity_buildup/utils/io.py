@@ -39,7 +39,7 @@ def save_results(path, results, experiment_config, methods, metrics, task_file, 
         pickle.dump(payload, handle)
 
 
-def save_method_result(path, experiment_id, method_name, method_config, results, metrics, config):
+def save_method_result(path, experiment_id, method_name, method_config, results, metrics, config, method_statistics=None):
     payload = {
         "experiment_id": experiment_id,
         "method_name": method_name,
@@ -47,6 +47,7 @@ def save_method_result(path, experiment_id, method_name, method_config, results,
         "results": results,
         "metrics": metrics,
         "config": config,
+        "method_statistics": method_statistics or [],
     }
     with open(path, "wb") as handle:
         pickle.dump(payload, handle)

@@ -3,6 +3,12 @@ import copy
 import torch
 
 try:
+    from tqdm import tqdm
+except ImportError:  # Keep experiments runnable in minimal environments.
+    def tqdm(iterable, **kwargs):
+        return iterable
+
+try:
     from ..datasets.factory import make_dataset
     from ..diagnostics.collector import collect_diagnostics
     from ..methods.factory import make_training_method
@@ -25,9 +31,20 @@ def make_model(config):
 
 
 def make_optimizer(model, config):
-    if config.get("optimizer", "adam").lower() != "adam":
-        raise ValueError("Only the existing Adam optimizer is currently supported")
-    return torch.optim.Adam(model.parameters(), lr=config["learning_rate"])
+    optimizer_name = config.get("optimizer", "adam").lower()
+    parameters = model.parameters()
+    learning_rate = config["learning_rate"]
+    if optimizer_name == "adam":
+        return torch.optim.Adam(parameters, lr=learning_rate)
+    if optimizer_name == "sgd":
+        return torch.optim.SGD(parameters, lr=learning_rate)
+    if optimizer_name in {"sgd_momentum", "sgd+momentum", "momentum"}:
+        return torch.optim.SGD(
+            parameters,
+            lr=learning_rate,
+            momentum=float(config.get("momentum", 0.9)),
+        )
+    raise ValueError("optimizer must be one of: 'sgd', 'sgd_momentum', or 'adam'")
 
 
 def make_loss_function(config):
@@ -58,18 +75,34 @@ def _make_method_states(methods, metrics, config, initial_state):
         model = make_model(config)
         model.load_state_dict(initial_state)
         optimizer = make_optimizer(model, config)
-        training_method = make_training_method(method_config.get("method_type", "backprop"), model, optimizer, method_config)
+        training_method = make_training_method(
+            method_config.get("method_type", "backprop"),
+            model,
+            optimizer,
+            method_config,
+            initial_state=initial_state,
+        )
         states[method_name] = MethodState(model, optimizer, training_method, create_empty_results(metrics))
     return states
 
 
-def run_method_on_tasks(config, method_name, method_config, metrics, tasks, initial_state, run_seed):
+def _statistics_to_python(value):
+    if isinstance(value, dict):
+        return {name: _statistics_to_python(item) for name, item in value.items()}
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().item()
+    return value
+
+
+def run_method_on_tasks(config, method_name, method_config, metrics, tasks, initial_state, run_seed, return_statistics=False):
     """Run exactly one method on one saved run without generating any data."""
     set_seed(run_seed)
     states = _make_method_states({method_name: method_config}, metrics, config, initial_state)
     state = states[method_name]
     loss_fn = make_loss_function(config)
-    for task in tasks:
+    method_statistics = []
+    task_iterator = tqdm(tasks, desc=f"{method_name} | seed {run_seed}", unit="task")
+    for task in task_iterator:
         x, y = _task_values(task)
         if method_config.get("reset_model_each_task", False):
             state.model.load_state_dict(initial_state)
@@ -107,7 +140,11 @@ def run_method_on_tasks(config, method_name, method_config, metrics, tasks, init
             reference_ntk=reference_ntk,
         )
         store_task_results(state.results, losses, diagnostics, metrics)
-    return convert_results_to_numpy(state.results)
+        method_statistics.append(_statistics_to_python(state.training_method.get_statistics()))
+    result = convert_results_to_numpy(state.results)
+    if return_statistics:
+        return result, method_statistics
+    return result
 
 
 def run_experiment(config, methods, metrics, task_runs=None, initial_state=None):
@@ -130,7 +167,7 @@ def run_experiment(config, methods, metrics, task_runs=None, initial_state=None)
     for run_index, tasks in enumerate(task_runs):
         set_seed(config["seed"] + run_index)
         method_states = _make_method_states(methods, metrics, config, initial_state)
-        for task in tasks:
+        for task in tqdm(tasks, desc=f"run {run_index + 1}/{len(task_runs)}", unit="task"):
             x, y = _task_values(task)
             for method_name, state in method_states.items():
                 method_config = methods[method_name]

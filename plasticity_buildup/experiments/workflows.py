@@ -131,13 +131,14 @@ def run_selected_methods(experiment_dir, methods_to_run, methods=None, metrics=N
             continue
 
         per_run_results = []
+        per_run_statistics = []
         method_config = methods[method_name]
         for record in metadata["runs"]:
             tasks_path = os.path.join(experiment_dir, record["tasks_file"])
             initial_path = os.path.join(experiment_dir, record["initial_model_file"])
             task_payload = torch.load(tasks_path, map_location="cpu", weights_only=False)
             initial_state = torch.load(initial_path, map_location="cpu", weights_only=False)
-            per_run_results.append(run_method_on_tasks(
+            run_result, run_statistics = run_method_on_tasks(
                 config,
                 method_name,
                 method_config,
@@ -145,7 +146,10 @@ def run_selected_methods(experiment_dir, methods_to_run, methods=None, metrics=N
                 task_payload["tasks"],
                 initial_state,
                 record["seed"],
-            ))
+                return_statistics=True,
+            )
+            per_run_results.append(run_result)
+            per_run_statistics.append(run_statistics)
         stacked = stack_runs(per_run_results, metrics)
         save_method_result(
             result_path,
@@ -155,6 +159,7 @@ def run_selected_methods(experiment_dir, methods_to_run, methods=None, metrics=N
             stacked,
             metrics,
             config,
+            method_statistics=per_run_statistics,
         )
         with open(result_path, "rb") as handle:
             import pickle

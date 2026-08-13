@@ -11,11 +11,27 @@ except ImportError:  # Supports `python main.py` from plasticity_buildup/.
 
 
 # Edit these settings for the intended workflow.
-MODE = "all"  # "generate", "run_methods", "plot", or "all"
-EXPERIMENT_DIR = None
-METHODS_TO_RUN = ["continual", "reset_optimizer", "fresh"]
-METHODS_TO_PLOT = ["continual", "reset_optimizer", "fresh"]
-METRICS_TO_PLOT = None
+MODE = "plot"  # "generate", "run_methods", "plot", or "all"
+EXPERIMENT_DIR = "outputs/nonlinear_xfixed/in10_h8-8_out1/samples512_tasks200_epochs50/adam_lr0.01"
+METHODS_TO_RUN = [
+    "backprop",
+    # "reset_optimizer",
+    "fresh",
+    "random_reset",
+    # "low_gradient_reset",
+    "redo",
+    "continual_backprop",
+    # "shrink_and_perturb",
+    # "l2",
+    "l2_init",
+]
+METHODS_TO_PLOT = METHODS_TO_RUN
+METRICS_TO_PLOT = [
+    "final_loss",
+    "dormant_fraction",
+    "gradient_norm",
+    "effective_rank",
+]
 
 
 def main(

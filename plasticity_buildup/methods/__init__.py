@@ -1,4 +1,5 @@
 from .base import TrainingMethod
 from .factory import make_training_method
+from .backprop import BackpropMethod
 
-__all__ = ["TrainingMethod", "make_training_method"]
+__all__ = ["TrainingMethod", "BackpropMethod", "make_training_method"]
