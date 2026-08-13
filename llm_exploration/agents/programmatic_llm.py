@@ -8,8 +8,11 @@ pick actions until the next regeneration point.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Callable, Optional
+
+import numpy as np
 
 from llm import LLMClient, ChatSession
 
@@ -54,7 +57,8 @@ Requirements:
 - Use the trajectory, program errors, learned knowledge, and rewards above to improve on the \
 current program (or write a new one if none exists or the previous one failed).
 - Do not access files, network, environment variables, subprocesses, or any external resource.
-- Do not import unsafe or system-related modules (no os, sys, subprocess, socket, importlib, etc.).
+- Imports are not available (no "import" statements at all, not even for numpy or math). \
+`np` (numpy) and `math` are already provided as globals, ready to use directly, e.g. `np.array(...)`.
 - Prefer deterministic, concise programs unless randomness is strategically useful.
 
 Respond with only the Python source code."""
@@ -182,12 +186,12 @@ class ProgrammaticLLMAgent(BaseAgent):
 
     def select_action(self, observation: Any) -> Any:
         """Select an action, regenerating the policy program if needed."""
-        self.observation_history.append(observation)
-        self.recent_observations.append(observation)
-
         if self.current_program is None or self.steps_since_program_generation >= self.n_actions:
             self._generate_new_program(observation)
             self.steps_since_program_generation = 0
+            
+        self.observation_history.append(observation)
+        self.recent_observations.append(observation)
 
         action, error = self._execute_policy(observation)
         if error is not None:
@@ -228,18 +232,7 @@ class ProgrammaticLLMAgent(BaseAgent):
         self.program_error_history.clear()
         self.program_versions.clear()
 
-        self.recent_observations.clear()
-        self.recent_actions.clear()
-        self.recent_rewards.clear()
-        self.recent_program_errors.clear()
-
         self.step_count = 0
-        self.program_generation_count = 0
-        self.steps_since_program_generation = 0
-
-        self.current_program = None
-        self.policy_function = None
-        self.compile_error = None
 
         if self.verbose:
             print("[ProgrammaticLLMAgent] Episode reset")
@@ -250,7 +243,7 @@ class ProgrammaticLLMAgent(BaseAgent):
         return {
             "metrics": {
                 "total_steps": self.step_count,
-                "program_generations": self.program_generation_count,
+                "total_program_generations": self.program_generation_count,
                 "program_execution_errors": num_errors,
                 "episode_return": sum(self.reward_history),
             },
@@ -325,7 +318,11 @@ class ProgrammaticLLMAgent(BaseAgent):
         self.current_program = program_source
         self.compile_error = None
 
-        restricted_globals: dict[str, Any] = {"__builtins__": _SAFE_BUILTINS}
+        restricted_globals: dict[str, Any] = {
+            "__builtins__": _SAFE_BUILTINS,
+            "np": np,
+            "math": math,
+        }
         try:
             exec(compile(program_source, "<generated_policy>", "exec"), restricted_globals)
         except Exception as e:

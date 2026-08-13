@@ -279,7 +279,7 @@ if __name__ == "__main__":
         #     env.observation_space,
         #     env.action_space,
         #     client=llm_client,
-        #     n_actions=10,
+        #     n_actions=50,
         #     verbose=False,
         #     device="cpu",
         # )
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     run_multi_seed_experiment(
         env_fn=make_env,
         agent_fn=make_agent,
-        seeds=[23],#, 45, 68, 123, 456],
-        max_steps=500,
-        tag="test",
+        seeds=[23, 45, 68],# [23, 45, 68, 123, 456],
+        max_steps=200,
+        tag="test_50",
     )

@@ -26,8 +26,10 @@ def _write_episode_artifacts(
         raise TypeError("agent episode data 'artifacts' must be a dictionary")
 
     # Keep the agent-specific JSON separate from the common training metrics.
-    agent_data_path = experiment_dir / "agent_data" / f"episode_{episode:04d}.json"
-    agent_data_path.parent.mkdir(parents=True, exist_ok=True)
+    agent_data_dir = experiment_dir / "agent_data"
+    agent_data_dir.mkdir(parents=True, exist_ok=True)
+
+    agent_data_path = agent_data_dir / f"episode_{episode:04d}.json"
     agent_data_path.write_text(
         json.dumps(metrics, indent=2) + "\n",
         encoding="utf-8",
@@ -41,7 +43,11 @@ def _write_episode_artifacts(
                 f"{relative_path}"
             )
 
-        path = experiment_dir / relative_path
+        # Give each episode's artifact its own file: "name.ext" -> "name_episode_0000.ext",
+        # nested under agent_data/ alongside the per-episode metrics.
+        stem, suffix = relative_path.stem, relative_path.suffix
+        numbered_name = f"{stem}_episode_{episode:04d}{suffix}"
+        path = agent_data_dir / relative_path.parent / numbered_name
         path.parent.mkdir(parents=True, exist_ok=True)
         if isinstance(content, bytes):
             path.write_bytes(content)

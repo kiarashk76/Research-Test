@@ -19,6 +19,11 @@ ACTION_NAMES = {
     3: "right",
 }
 
+# The shortest path from agent to goal must be strictly longer than this
+# many steps. On an obstacle-free grid, the shortest path always exists and
+# its length is just the Manhattan distance between agent and goal.
+MIN_PATH_LENGTH = 10
+
 
 class SimpleGridEnv(BaseEnvironment):
     """Simple grid navigation environment for testing RL agents."""
@@ -27,6 +32,12 @@ class SimpleGridEnv(BaseEnvironment):
 
     def __init__(self, max_steps: int = 100, size: int = 8):
         super().__init__()
+
+        if 2 * (size - 1) <= MIN_PATH_LENGTH:
+            raise ValueError(
+                f"size={size} cannot support a shortest path longer than "
+                f"{MIN_PATH_LENGTH} steps (max possible is {2 * (size - 1)})."
+            )
 
         self.size = size
         self.max_steps = max_steps
@@ -42,6 +53,7 @@ class SimpleGridEnv(BaseEnvironment):
 
         self.agent_pos = np.zeros(2, dtype=np.int64)
         self.goal_pos = np.zeros(2, dtype=np.int64)
+        self.reward_value = 0
         self.steps = 0
 
     def reset(
@@ -57,22 +69,23 @@ class SimpleGridEnv(BaseEnvironment):
             for c in range(self.size)
         ]
 
-        indices = self.np_random.choice(
-            len(cells),
-            size=2,
-            replace=False,
-        )
+        while True:
+            indices = self.np_random.choice(
+                len(cells),
+                size=2,
+                replace=False,
+            )
 
-        self.agent_pos = np.array(
-            cells[indices[0]],
-            dtype=np.int64,
-        )
+            agent_pos = np.array(cells[indices[0]], dtype=np.int64)
+            goal_pos = np.array(cells[indices[1]], dtype=np.int64)
+            path_length = int(abs(agent_pos[0] - goal_pos[0]) + abs(agent_pos[1] - goal_pos[1]))
 
-        self.goal_pos = np.array(
-            cells[indices[1]],
-            dtype=np.int64,
-        )
+            if path_length > MIN_PATH_LENGTH:
+                break
 
+        self.agent_pos = agent_pos
+        self.goal_pos = goal_pos
+        self.reward_value = path_length
         self.steps = 0
 
         return self._get_obs(), {}
@@ -85,7 +98,7 @@ class SimpleGridEnv(BaseEnvironment):
 
         self._move(action)
 
-        reward = 1 if self._on_goal() else 0
+        reward = self.reward_value if self._on_goal() else 0
         terminated = bool(reward)
 
         truncated = (

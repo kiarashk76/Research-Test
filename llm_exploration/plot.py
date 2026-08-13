@@ -200,12 +200,13 @@ def main():
         # "LLM-Agent": "outputs/SimpleGridEnv_SimpleLLMAgent_baseline",
         # "Hybrid (10% LLM)": "outputs/SimpleGridEnv_HybridLLMDQNAgent_freq_10pct",
         
-        "DQN5": "outputs/SimpleGridEnv_DQNAgent_dqn_5batches",
-        "Hybrid (10% LLM, DQN 5)": "outputs/SimpleGridEnv_HybridLLMDQNAgent_dqn_5batches-freq_10pct",
+        "LLM-Agent-50": "outputs/SimpleGridEnv_SimpleLLMAgent_test_50",
+        "LLM-Agent-20": "outputs/SimpleGridEnv_SimpleLLMAgent_test",
+        "Programmatic-50": "outputs/SimpleGridEnv_ProgrammaticLLMAgent_test_50", 
     }
     
     # Optional: set output file to save the plot
-    output_file = Path("comparison.png")  # Set to Path("comparison.png") to save
+    output_file = Path("comparison2.png")  # Set to Path("comparison.png") to save
     
     plot_experiments(experiments_dict, output_file=output_file, show=True)
 
