@@ -4,8 +4,8 @@
 #SBATCH --mem=2G
 #SBATCH --cpus-per-task=1
 #SBATCH --job-name=exp-main
-#SBATCH --output=/home/aghakasi/scratch/TestResearch/llm_exploration/slurm/logs/main_%j.out
-#SBATCH --error=/home/aghakasi/scratch/TestResearch/llm_exploration/slurm/logs/main_%j.err
+#SBATCH --output=/home/aghakasi/scratch/TestResearch/llm_exploration/logs/main_%j.out
+#SBATCH --error=/home/aghakasi/scratch/TestResearch/llm_exploration/logs/main_%j.err
 
 set -euo pipefail
 
@@ -39,7 +39,7 @@ TAG="test"
 # ============================================================================
 
 source ~/ENV/llm/bin/activate
-source /scratch/aghakasi/TestResearch/llm_exploration/slurm/env.sh
+source /scratch/aghakasi/TestResearch/llm_exploration/llm/llm_info.sh
 
 export PYTHONUNBUFFERED=1
 export FLEXIBLAS=imkl

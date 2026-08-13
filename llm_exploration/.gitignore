@@ -6,12 +6,11 @@ __pycache__/
 outputs/
 
 # Slurm logs
-slurm/logs/*
-!slurm/logs/.gitkeep
-slurm/env.sh
+logs/*
 
 # Secrets
 slurm/secrets.env
+llm_info.sh
 
 # Local/editor noise
 .DS_Store
