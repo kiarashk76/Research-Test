@@ -15,20 +15,32 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from llm.client import Message, build_content
+from .client import Message, build_content
 
 
 class ChatSession:
     """Keeps an ordered message history and sends turns through a client."""
 
-    def __init__(self, client, system: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        client,
+        system: Optional[str] = None,
+        max_messages: Optional[int] = None,
+    ) -> None:
         """Args:
             client: An :class:`~llm.client.LLMClient`.
             system: Optional system prompt, seeded first and restored on
                 :meth:`reset`.
+            max_messages: Maximum number of recent non-system messages to
+                keep. The system prompt is always kept. ``None`` keeps the
+                full history.
         """
+        if max_messages is not None and max_messages < 1:
+            raise ValueError("max_messages must be at least 1 or None")
+
         self.client = client
         self.system = system
+        self.max_messages = max_messages
         self.messages: List[Message] = []
         if system:
             self.messages.append({"role": "system", "content": system})
@@ -47,9 +59,24 @@ class ChatSession:
             The assistant reply text.
         """
         self.messages.append({"role": "user", "content": build_content(parts)})
+        self._trim_messages()
         reply = self.client._send(self.messages, temperature=temperature, max_tokens=max_tokens)
         self.messages.append({"role": "assistant", "content": reply})
+        self._trim_messages()
         return reply
+
+    def _trim_messages(self) -> None:
+        if self.max_messages is None:
+            return
+
+        if self.system:
+            system_messages = self.messages[:1]
+            conversation_messages = self.messages[1:]
+        else:
+            system_messages = []
+            conversation_messages = self.messages
+
+        self.messages = system_messages + conversation_messages[-self.max_messages:]
 
     def reset(self) -> None:
         """Clear the history, re-seeding the system prompt if one was set."""

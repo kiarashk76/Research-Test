@@ -13,7 +13,12 @@ from __future__ import annotations
 
 import os
 
-from llm.client import LLMClient
+from .client import LLMClient
+
+
+MODEL = os.environ.get("VULCAN_MODEL") # GEMINI_MODEL
+BASE_URL = os.environ.get("VULCAN_BASE_URL") # GEMINI_BASE_URL
+API_KEY = os.environ.get("VULCAN_API_KEY") # GEMINI_API_KEY
 
 
 def main() -> None:
