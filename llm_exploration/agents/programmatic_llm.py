@@ -131,8 +131,8 @@ class ProgrammaticLLMAgent(BaseAgent):
         self,
         observation_space,
         action_space,
+        client: LLMClient,
         n_actions: int = 10,
-        client: Optional[LLMClient] = None,
         verbose: bool = False,
         device: str = "cpu",
     ):
@@ -141,7 +141,7 @@ class ProgrammaticLLMAgent(BaseAgent):
         self.n_actions = max(1, n_actions)
         self.device = device
 
-        self.client = client or LLMClient()
+        self.client = client
         system_prompt = SYSTEM_PROMPT.format(
             observation_space_description=self._describe_observation_space(),
             action_space_description=self._describe_action_space(),

@@ -33,11 +33,7 @@ class SimpleGridEnv(BaseEnvironment):
     def __init__(self, max_steps: int = 100, size: int = 8):
         super().__init__()
 
-        if 2 * (size - 1) <= MIN_PATH_LENGTH:
-            raise ValueError(
-                f"size={size} cannot support a shortest path longer than "
-                f"{MIN_PATH_LENGTH} steps (max possible is {2 * (size - 1)})."
-            )
+        self.min_path_length = min(MIN_PATH_LENGTH, 2 * (size - 1))
 
         self.size = size
         self.max_steps = max_steps
@@ -80,7 +76,7 @@ class SimpleGridEnv(BaseEnvironment):
             goal_pos = np.array(cells[indices[1]], dtype=np.int64)
             path_length = int(abs(agent_pos[0] - goal_pos[0]) + abs(agent_pos[1] - goal_pos[1]))
 
-            if path_length > MIN_PATH_LENGTH:
+            if path_length > self.min_path_length:
                 break
 
         self.agent_pos = agent_pos

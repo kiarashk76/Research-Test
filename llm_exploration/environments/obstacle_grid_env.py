@@ -84,11 +84,8 @@ class ObstacleGridEnv(BaseEnvironment):
     ):
         super().__init__()
 
-        if 2 * (size - 1) <= MIN_PATH_LENGTH:
-            raise ValueError(
-                f"size={size} cannot support a shortest path longer than "
-                f"{MIN_PATH_LENGTH} steps (max possible is {2 * (size - 1)})."
-            )
+        self.min_path_length = min(MIN_PATH_LENGTH, 2 * (size - 1))
+
         if not 0 <= obstacle_density < 1:
             raise ValueError(f"obstacle_density must be in [0, 1), got {obstacle_density}")
 
@@ -149,7 +146,7 @@ class ObstacleGridEnv(BaseEnvironment):
                 self.size,
             )
 
-            if path_length is not None and path_length > MIN_PATH_LENGTH:
+            if path_length is not None and path_length > self.min_path_length:
                 self.agent_pos = np.array(agent_cell, dtype=np.int64)
                 self.goal_pos = np.array(goal_cell, dtype=np.int64)
                 self.obstacle_mask = np.zeros((self.size, self.size), dtype=bool)
@@ -161,7 +158,7 @@ class ObstacleGridEnv(BaseEnvironment):
 
         raise RuntimeError(
             f"Could not generate a map with a shortest path longer than "
-            f"{MIN_PATH_LENGTH} after {MAX_GENERATION_ATTEMPTS} attempts. "
+            f"{self.min_path_length} after {MAX_GENERATION_ATTEMPTS} attempts. "
             f"Try a lower obstacle_density or a larger size."
         )
 

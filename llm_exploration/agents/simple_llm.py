@@ -82,8 +82,8 @@ class SimpleLLMAgent(BaseAgent):
         self,
         observation_space,
         action_space,
+        client:LLMClient,
         n_actions: int = 1,
-        client: Optional[LLMClient] = None,
         verbose: bool = False,
         device: str = "cpu",
     ):
@@ -93,7 +93,7 @@ class SimpleLLMAgent(BaseAgent):
         self.device = device
 
         # Initialize LLM client and chat session
-        self.client = client or LLMClient()
+        self.client = client
         action_space_desc = self._describe_action_space()
         system_prompt = SYSTEM_PROMPT.format(action_space_description=action_space_desc)
         self.chat = ChatSession(

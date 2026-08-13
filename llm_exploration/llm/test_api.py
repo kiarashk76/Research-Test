@@ -16,9 +16,9 @@ import os
 from .client import LLMClient
 
 
-MODEL = os.environ.get("VULCAN_MODEL") # GEMINI_MODEL
-BASE_URL = os.environ.get("VULCAN_BASE_URL") # GEMINI_BASE_URL
-API_KEY = os.environ.get("VULCAN_API_KEY") # GEMINI_API_KEY
+MODEL = os.environ.get("GEMINI_MODEL") # GEMINI_MODEL, VULCAN_MODEL
+BASE_URL = os.environ.get("GEMINI_BASE_URL") # GEMINI_BASE_URL, VULCAN_BASE_URL
+API_KEY = os.environ.get("GEMINI_API_KEY") # GEMINI_API_KEY, VULCAN_API_KEY
 
 
 def main() -> None:

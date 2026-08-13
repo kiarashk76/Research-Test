@@ -8,6 +8,7 @@ outputs/
 # Slurm logs
 slurm/logs/*
 !slurm/logs/.gitkeep
+slurm/env.sh
 
 # Secrets
 slurm/secrets.env
