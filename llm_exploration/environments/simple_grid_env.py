@@ -76,7 +76,7 @@ class SimpleGridEnv(BaseEnvironment):
             goal_pos = np.array(cells[indices[1]], dtype=np.int64)
             path_length = int(abs(agent_pos[0] - goal_pos[0]) + abs(agent_pos[1] - goal_pos[1]))
 
-            if path_length > self.min_path_length:
+            if path_length >= self.min_path_length:
                 break
 
         self.agent_pos = agent_pos

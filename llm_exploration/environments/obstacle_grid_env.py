@@ -146,7 +146,7 @@ class ObstacleGridEnv(BaseEnvironment):
                 self.size,
             )
 
-            if path_length is not None and path_length > self.min_path_length:
+            if path_length is not None and path_length >= self.min_path_length:
                 self.agent_pos = np.array(agent_cell, dtype=np.int64)
                 self.goal_pos = np.array(goal_cell, dtype=np.int64)
                 self.obstacle_mask = np.zeros((self.size, self.size), dtype=bool)
