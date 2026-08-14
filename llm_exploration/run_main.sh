@@ -13,22 +13,23 @@ set -euo pipefail
 # Experiment Configuration
 # ============================================================================
 
-ENV_NAME="SimpleGridEnv"
-AGENT_NAME="SimpleLLMAgent"
+ENV_NAME="ObstacleGridEnv"
+AGENT_NAME="ProgrammaticScientistAgent"
 LLM_NAME="GEMINI"
 
 ENV_OVERRIDES='{
-    "size": 5,
-    "max_steps": 50
+    "size": 10,
+    "max_steps": 50,
+    "obstacle_density": 0.2
 }'
 
 AGENT_OVERRIDES='{
-    "n_actions": 25
 }'
 
-SEEDS="23 45 68"
 
-MAX_STEPS=200
+SEEDS="23"
+
+MAX_STEPS=500
 NUM_EPISODES=""
 
 TAG="test"
@@ -74,4 +75,11 @@ if [[ -n "$NUM_EPISODES" ]]; then
     ARGS+=(--num-episodes "$NUM_EPISODES")
 fi
 
+ENV_VIS_ARGS=(
+    --env "$ENV_NAME"
+    --env-overrides "$ENV_OVERRIDES"
+    --seeds $SEEDS
+)
+
+python env_vis.py "${ENV_VIS_ARGS[@]}"
 python main.py "${ARGS[@]}"

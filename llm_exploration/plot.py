@@ -11,21 +11,26 @@ import numpy as np
 
 def moving_average(data: list, window_size: int = 5) -> list:
     """Compute moving average of data to smooth plots.
-    
+
     Args:
         data: Input data list.
         window_size: Size of the moving window. Defaults to 5.
-    
+
     Returns:
-        Smoothed data with the same length as input (padded at edges).
+        Smoothed data with the same length as input. Near the edges, where
+        the window extends past the array, the average is taken over only
+        the overlapping points instead of being biased toward zero.
     """
     if len(data) < window_size:
         return data
-    
+
     # Use numpy's convolve for efficient moving average
-    kernel = np.ones(window_size) / window_size
-    # 'same' mode pads the edges to maintain length
-    smoothed = np.convolve(data, kernel, mode='same')
+    kernel = np.ones(window_size)
+    sums = np.convolve(data, kernel, mode='same')
+    # How many real data points actually fell in each window (< window_size
+    # near the edges), so the edges are averaged over what's really there.
+    counts = np.convolve(np.ones(len(data)), kernel, mode='same')
+    smoothed = sums / counts
     return smoothed.tolist()
 
 
@@ -88,11 +93,17 @@ def get_experiment_label(experiment_dir: Path) -> str:
     return name
 
 
-def plot_experiments(experiments_dict: dict[str, Path], output_file: Path | None = None, show: bool = True) -> None:
+def plot_experiments(
+    experiments_dict: dict[str, Path],
+    title: str = "Performance Comparison Across Experiments",
+    output_file: Path | None = None,
+    show: bool = True,
+) -> None:
     """Plot performance metrics for multiple experiments on 4 axes.
-    
+
     Args:
         experiments_dict: Dictionary mapping legend labels to experiment directory paths.
+        title: Figure-level title.
         output_file: Optional path to save the figure.
         show: Whether to display the figure.
     """
@@ -113,7 +124,7 @@ def plot_experiments(experiments_dict: dict[str, Path], output_file: Path | None
     
     # Create figure with 4 subplots: env steps, prompt tokens, completion tokens, wall time
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("Performance Comparison Across Experiments", fontsize=16, fontweight="bold")
+    fig.suptitle(title, fontsize=16, fontweight="bold")
     
     ax_env_steps = axes[0, 0]
     ax_prompt_tokens = axes[0, 1]
@@ -196,19 +207,27 @@ def main():
     """Main entry point."""
     # Define experiments to plot: label -> experiment directory path
     experiments_dict = {
-        # "DQN": "outputs/SimpleGridEnv_DQNAgent_baseline",
-        # "LLM-Agent": "outputs/SimpleGridEnv_SimpleLLMAgent_baseline",
-        # "Hybrid (10% LLM)": "outputs/SimpleGridEnv_HybridLLMDQNAgent_freq_10pct",
         
-        "LLM-Agent-50": "outputs/SimpleGridEnv_SimpleLLMAgent_test_50",
-        "LLM-Agent-20": "outputs/SimpleGridEnv_SimpleLLMAgent_test",
-        "Programmatic-50": "outputs/SimpleGridEnv_ProgrammaticLLMAgent_test_50", 
+        # "LLM-Prog": "outputs/SimpleGridEnv/size6_maxsteps50/ProgrammaticLLMAgent/nactions50/test",
+        # "LLM-Agent": "outputs/SimpleGridEnv/size6_maxsteps50/SimpleLLMAgent/nactions50/test", 
+                
+        # "LLM-Prog": "outputs/SimpleGridEnv/size12_maxsteps50/ProgrammaticLLMAgent/nactions50/test",
+        # "LLM-Agent": "outputs/SimpleGridEnv/size12_maxsteps50/SimpleLLMAgent/nactions50/test", 
+        
+        "LLM-Prog": "outputs/ObstacleGridEnv/size10_maxsteps50_obstacledensity0.2/ProgrammaticLLMAgent/nactions50/test",
+        "LLM-Agent": "outputs/ObstacleGridEnv/size10_maxsteps50_obstacledensity0.2/SimpleLLMAgent/nactions50/test",
+        # "DQN": "outputs/SimpleGridEnv/size15_maxsteps50/DQNAgent/learningrate0.001_batchsize64/test",
     }
     
     # Optional: set output file to save the plot
-    output_file = Path("comparison2.png")  # Set to Path("comparison.png") to save
-    
-    plot_experiments(experiments_dict, output_file=output_file, show=True)
+    output_file = Path("outputs/Figures/comparison-obstacle.png")  # Set to Path("comparison.png") to save
+
+    plot_experiments(
+        experiments_dict,
+        title="LLM vs Programmatic Agent - Size 15",
+        output_file=output_file,
+        show=True,
+    )
 
 
 if __name__ == "__main__":

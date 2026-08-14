@@ -85,6 +85,7 @@ AGENT_CONFIGS = {
         "uses_llm": True,
         "params": {
             "n_actions": 1,
+            "max_retries": 5,
             "verbose": False,
             "device": "cpu",
         },
@@ -96,10 +97,26 @@ AGENT_CONFIGS = {
         "uses_llm": True,
         "params": {
             "n_actions": 10,
+            "max_retries": 5,
+            "error_tolerance": 3,
             "verbose": False,
             "device": "cpu",
         },
         "folder_keys": ["n_actions"],
+    },
+
+    "ProgrammaticScientistAgent": {
+        "constructor": ProgrammaticScientistAgent,
+        "uses_llm": True,
+        "params": {
+            "steps_per_program": 20,
+            "max_generation_retries": 2,
+            "use_environment_understanding": True,
+            "use_hypotheses": False,
+            "verbose": True,
+            "device": "cpu",
+        },
+        "folder_keys": ["steps_per_program"],
     },
 }
 

@@ -35,6 +35,11 @@ Respond with a JSON array of exactly {n_actions} action(s) like this:
 
 Only respond with the JSON array, no additional text."""
 
+RETRY_FEEDBACK_TEMPLATE = """
+
+Your previous response could not be used ({error}). Respond again, following the \
+format exactly: {{"actions": [action1, action2, ...]}}"""
+
 KNOWLEDGE_UPDATE_PROMPT_TEMPLATE = """You are learning about an environment through episodes. Update your knowledge base based on the new trajectory.
 
 Previous knowledge (or empty if this is the first episode):
@@ -74,6 +79,10 @@ class SimpleLLMAgent(BaseAgent):
         n_actions: Number of steps/actions to request from the LLM (default 1).
         client: Optional LLMClient instance. If None, a new one is created
                 with default settings.
+        max_retries: Number of extra attempts to request actions if the LLM
+            call errors or its response can't be parsed into actions (default 3,
+            i.e. up to 4 attempts total). Each retry tells the LLM what went
+            wrong with the previous attempt.
         verbose: Whether to print debug info.
         device: Device hint (for compatibility with other agents).
     """
@@ -84,12 +93,14 @@ class SimpleLLMAgent(BaseAgent):
         action_space,
         client:LLMClient,
         n_actions: int = 1,
+        max_retries: int = 3,
         verbose: bool = False,
         device: str = "cpu",
     ):
         super().__init__(action_space, verbose=verbose)
         self.observation_space = observation_space
         self.n_actions = max(1, n_actions)
+        self.max_retries = max(0, max_retries)
         self.device = device
 
         # Initialize LLM client and chat session
@@ -158,25 +169,40 @@ class SimpleLLMAgent(BaseAgent):
             learned_knowledge_context = f"Your current knowledge:\n{self.learned_knowledge}\n\n"
 
         # Create the prompt
-        prompt = ACTION_REQUEST_PROMPT_TEMPLATE.format(
+        base_prompt = ACTION_REQUEST_PROMPT_TEMPLATE.format(
             learned_knowledge=learned_knowledge_context,
             n_actions=self.n_actions,
             history_text=history_text,
             current_observation=obs_str,
         )
 
-        # Query the LLM
-        try:
-            response = self.chat.send(prompt)
-            actions = self._parse_actions_from_response(response)
-            self.action_queue.extend(actions)
-            
-            if self.verbose:
-                print(f"[SimpleLLMAgent] Got {len(actions)} action(s): {actions}")
-        except Exception as e:
-            if self.verbose:
-                print(f"[SimpleLLMAgent] Error querying LLM: {e}")
-            # On error, the queue remains empty and we'll use fallback in select_action
+        # Query the LLM, retrying (with feedback on what went wrong) if the
+        # call errors or the response doesn't yield any usable actions.
+        last_error: Optional[BaseException] = None
+        for attempt in range(self.max_retries + 1):
+            prompt = base_prompt
+            if attempt > 0:
+                prompt += RETRY_FEEDBACK_TEMPLATE.format(error=last_error)
+            try:
+                response = self.chat.send(prompt)
+                actions = self._parse_actions_from_response(response)
+                if not actions:
+                    raise ValueError("LLM returned an empty action list")
+
+                self.action_queue.extend(actions)
+                if self.verbose:
+                    print(f"[SimpleLLMAgent] Got {len(actions)} action(s): {actions}")
+                return
+            except Exception as e:
+                last_error = e
+                if self.verbose:
+                    print(f"[SimpleLLMAgent] Attempt {attempt + 1}/{self.max_retries + 1} "
+                          f"failed to get actions: {e}")
+
+        if self.verbose:
+            print(f"[SimpleLLMAgent] Exhausted all {self.max_retries + 1} attempts; "
+                  f"falling back to random action(s). Last error: {last_error}")
+        # On exhaustion, the queue remains empty and we'll use fallback in select_action
 
     def _format_history(self) -> str:
         """Format the last N observations and actions for the prompt."""

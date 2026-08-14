@@ -63,6 +63,12 @@ current program (or write a new one if none exists or the previous one failed).
 
 Respond with only the Python source code."""
 
+RETRY_FEEDBACK_TEMPLATE = """
+
+Your previous response could not be turned into a usable policy ({error}). Respond \
+again with a corrected, complete program. Remember: raw Python source only, no \
+Markdown/commentary, and it must define `def policy(observation): ... return action`."""
+
 KNOWLEDGE_UPDATE_PROMPT_TEMPLATE = """You are learning about an environment through episodes of \
 programmatic policies. Update your knowledge base based on the new episode.
 
@@ -112,9 +118,12 @@ class ProgrammaticLLMAgent(BaseAgent):
     Every ``n_actions`` steps, the LLM is asked to (re)write a
     ``policy(observation) -> action`` program based on persistent learned
     knowledge, the current program, and the trajectory collected since the
-    last generation. The program is executed locally at every step; on any
-    failure (exception, invalid action) a random action is taken instead and
-    the failure is recorded as feedback for the next generation.
+    last generation. If the LLM call errors or the response yields no usable
+    ``policy`` function, generation is retried immediately (up to
+    ``max_retries`` times) with feedback about what went wrong. The program is
+    executed locally at every step; on any per-step failure (exception,
+    invalid action) a random action is taken instead and the failure is
+    recorded as feedback for the next generation.
 
     Args:
         observation_space: The environment's observation space (for context).
@@ -123,6 +132,15 @@ class ProgrammaticLLMAgent(BaseAgent):
             regeneration (default 10).
         client: Optional LLMClient instance. If None, a new one is created
                 with default settings.
+        max_retries: Number of extra attempts to generate a usable policy if
+            the LLM call errors, fails to compile, or doesn't define a
+            callable `policy` (default 3, i.e. up to 4 attempts total). Each
+            retry tells the LLM what went wrong with the previous attempt.
+        error_tolerance: If the current program accumulates this many runtime
+            errors (exceptions or invalid actions) since it was last (re)
+            generated, regeneration is triggered early, before `n_actions` is
+            reached. `None` (default) disables this and only regenerates on
+            schedule.
         verbose: Whether to print debug info.
         device: Device hint (for compatibility with other agents).
     """
@@ -133,12 +151,16 @@ class ProgrammaticLLMAgent(BaseAgent):
         action_space,
         client: LLMClient,
         n_actions: int = 10,
+        max_retries: int = 3,
+        error_tolerance: Optional[int] = None,
         verbose: bool = False,
         device: str = "cpu",
     ):
         super().__init__(action_space, verbose=verbose)
         self.observation_space = observation_space
         self.n_actions = max(1, n_actions)
+        self.max_retries = max(0, max_retries)
+        self.error_tolerance = None if error_tolerance is None else max(1, error_tolerance)
         self.device = device
 
         self.client = client
@@ -176,6 +198,7 @@ class ProgrammaticLLMAgent(BaseAgent):
         self.step_count = 0
         self.program_generation_count = 0
         self.steps_since_program_generation = 0
+        self.early_regeneration_count = 0
 
         if self.verbose:
             print(f"[ProgrammaticLLMAgent] Initialized with n_actions={self.n_actions}")
@@ -186,10 +209,23 @@ class ProgrammaticLLMAgent(BaseAgent):
 
     def select_action(self, observation: Any) -> Any:
         """Select an action, regenerating the policy program if needed."""
+        recent_error_count = sum(1 for e in self.recent_program_errors if e is not None)
+        error_budget_exceeded = (
+            self.error_tolerance is not None and recent_error_count >= self.error_tolerance
+        )
+
         if self.current_program is None or self.steps_since_program_generation >= self.n_actions:
             self._generate_new_program(observation)
             self.steps_since_program_generation = 0
-            
+        elif error_budget_exceeded:
+            if self.verbose:
+                print(f"[ProgrammaticLLMAgent] {recent_error_count} runtime errors since last "
+                      f"generation (tolerance={self.error_tolerance}); regenerating early "
+                      f"(step {self.step_count})")
+            self.early_regeneration_count += 1
+            self._generate_new_program(observation)
+            self.steps_since_program_generation = 0
+
         self.observation_history.append(observation)
         self.recent_observations.append(observation)
 
@@ -244,6 +280,7 @@ class ProgrammaticLLMAgent(BaseAgent):
             "metrics": {
                 "total_steps": self.step_count,
                 "total_program_generations": self.program_generation_count,
+                "early_regenerations": self.early_regeneration_count,
                 "program_execution_errors": num_errors,
                 "episode_return": sum(self.reward_history),
             },
@@ -270,7 +307,7 @@ class ProgrammaticLLMAgent(BaseAgent):
         if self.learned_knowledge:
             learned_knowledge_context = f"Your current knowledge:\n{self.learned_knowledge}\n\n"
 
-        prompt = PROGRAM_GENERATION_PROMPT_TEMPLATE.format(
+        base_prompt = PROGRAM_GENERATION_PROMPT_TEMPLATE.format(
             learned_knowledge=learned_knowledge_context,
             observation_space_description=self._describe_observation_space(),
             action_space_description=self._describe_action_space(),
@@ -279,16 +316,31 @@ class ProgrammaticLLMAgent(BaseAgent):
             current_observation=self._format_observation(current_observation),
         )
 
-        try:
-            response = self.chat.send(prompt)
-            source = self._clean_program_source(response)
-            self._compile_program(source)
-        except Exception as e:
-            self.current_program = None
-            self.policy_function = None
-            self.compile_error = f"LLM query failed: {e}"
+        # Query the LLM, retrying (with feedback on what went wrong) if the
+        # call errors or the response doesn't yield a usable `policy` function.
+        for attempt in range(self.max_retries + 1):
+            prompt = base_prompt
+            if attempt > 0:
+                prompt += RETRY_FEEDBACK_TEMPLATE.format(error=self.compile_error)
+            try:
+                response = self.chat.send(prompt)
+                source = self._clean_program_source(response)
+                self._compile_program(source)
+            except Exception as e:
+                self.current_program = None
+                self.policy_function = None
+                self.compile_error = f"LLM query failed: {e}"
+
+            if self.policy_function is not None:
+                break
+
             if self.verbose:
-                print(f"[ProgrammaticLLMAgent] Error generating program: {e}")
+                print(f"[ProgrammaticLLMAgent] Attempt {attempt + 1}/{self.max_retries + 1} "
+                      f"produced no usable policy: {self.compile_error}")
+        else:
+            if self.verbose:
+                print(f"[ProgrammaticLLMAgent] Exhausted all {self.max_retries + 1} attempts; "
+                      f"falling back to random actions until the next regeneration.")
 
         self.program_generation_count += 1
         if self.current_program:
