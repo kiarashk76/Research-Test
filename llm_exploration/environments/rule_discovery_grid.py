@@ -24,23 +24,61 @@ ACTION_NAMES = {
     4: "koba",
 }
 
+# Brief, environment-specific context for LLM prompts -- see
+# core.environment.EnvironmentAdapter / core.prompts.resolve_environment_context.
+# Deliberately vague about what the object types and the "koba" action
+# actually do -- that's exactly what this environment is meant to be
+# discovered through interaction, not told upfront.
+ENVIRONMENT_DESCRIPTION = (
+    "A 2D grid-world environment containing an agent and several types of objects "
+    "with unknown interactions and effects. The rules governing how objects relate "
+    "to each other and to reward must be discovered through interaction."
+)
+
+OBSERVATION_SPACE_DESCRIPTION = (
+    "The observation is the entire grid as a 2D array; each cell holds a code for "
+    "what occupies it, including the agent and several distinct object types whose "
+    "behavior is not explained here."
+)
+
+ACTION_SPACE_DESCRIPTION = (
+    "The action space is discrete and contains four movement actions (up, down, "
+    "left, right) plus one additional interaction action whose effect is not "
+    "explained here."
+)
+
 
 class RuleDiscoveryGridEnv(BaseEnvironment):
     """A small grid world with unknown interaction rules."""
 
     metadata = {"render_modes": ["ansi"]}
 
-    def __init__(self, max_steps: int = 100, size: int = 6):
+    def __init__(self, max_steps: int = 100, size: int = 6, reward_shaping: bool = False):
         super().__init__()
 
         self.size = size
         self.max_steps = max_steps
+        self.reward_shaping = reward_shaping
         self.action_space = spaces.Discrete(5)
         self.observation_space = spaces.Box(
             low=EMPTY,
             high=Y,
             shape=(self.size, self.size),
             dtype=np.int64,
+        )
+        # Instance-level, size-aware hint -- takes precedence over the
+        # static OBSERVATION_SPACE_DESCRIPTION module constant (see
+        # core.environment.EnvironmentAdapter's precedence order). States
+        # the actual grid size and code count in plain English, but -- per
+        # this module's own design intent above -- never which code means
+        # which, nor what any object type does; that's exactly what must
+        # be discovered through interaction.
+        self.observation_space_description_hint = (
+            f"The observation is the entire grid as a {self.size}x{self.size} 2D array of "
+            "integers (one value per cell). Each cell's value is one of 7 possible codes "
+            "(0 through 6) -- one of them is the agent, the rest are distinct object types "
+            "whose identity and behavior are not explained here and must be discovered "
+            "through interaction."
         )
 
         self.agent_pos = np.zeros(2, dtype=np.int64)
@@ -50,6 +88,9 @@ class RuleDiscoveryGridEnv(BaseEnvironment):
         self.y_pos: Optional[np.ndarray] = None
         self.a_on = False
         self.steps = 0
+        self.reward_value = 0
+        self._a_bonus_given = False
+        self._b_bonus_given = False
 
     def reset(
         self,
@@ -69,24 +110,40 @@ class RuleDiscoveryGridEnv(BaseEnvironment):
         self.y_pos = None
         self.a_on = False
         self.steps = 0
+        self._a_bonus_given = False
+        self._b_bonus_given = False
+        # Proxy difficulty score (agent->a->b->x), mirroring the fixed,
+        # reset-time reward_value used by SimpleGridEnv/ObstacleGridEnv, so
+        # the terminal reward for reaching Y scales with how spread out
+        # this episode's task is, rather than a flat +1.
+        self.reward_value = (
+            self._manhattan(self.agent_pos, self.a_pos)
+            + self._manhattan(self.a_pos, self.b_pos)
+            + self._manhattan(self.b_pos, self.x_pos)
+        )
 
         return self._get_obs(), {}
 
     def step(self, action: int):
         self.steps += 1
 
+        shaping_bonus = 0.0
         if action in (0, 1, 2, 3):
             self._move(action)
         elif action == 4:
-            self._koba()
+            shaping_bonus = self._koba()
         else:
             raise ValueError(f"Invalid action: {action}")
 
-        reward = 1 if self._on_y() else 0
+        reward = self.reward_value if self._on_y() else 0
         terminated = bool(reward)
         truncated = self.steps >= self.max_steps and not terminated
 
-        return self._get_obs(), reward - 1, terminated, truncated, {}
+        total_reward = reward - 1
+        if self.reward_shaping:
+            total_reward += shaping_bonus
+
+        return self._get_obs(), total_reward, terminated, truncated, {}
 
     def render(self) -> str:
         chars = {
@@ -117,14 +174,26 @@ class RuleDiscoveryGridEnv(BaseEnvironment):
 
         self.agent_pos = new_pos
 
-    def _koba(self) -> None:
+    def _koba(self) -> float:
+        """Performs the koba action; returns the one-time reward-shaping
+        bonus earned by this action (0 if nothing new happened), which
+        ``step`` only adds to the reward when ``reward_shaping`` is on."""
         if self._adjacent_to(self.a_pos):
+            was_on = self.a_on
             self.a_on = not self.a_on
-            return
+            if not was_on and self.a_on and not self._a_bonus_given:
+                self._a_bonus_given = True
+                return 1.0
+            return 0.0
 
         if self.a_on and self._adjacent_to(self.b_pos) and self.x_pos is not None:
             self.y_pos = self.x_pos.copy()
             self.x_pos = None
+            if not self._b_bonus_given:
+                self._b_bonus_given = True
+                return 1.0
+
+        return 0.0
 
     def _get_obs(self) -> np.ndarray:
         grid = np.full((self.size, self.size), EMPTY, dtype=np.int64)
@@ -154,6 +223,10 @@ class RuleDiscoveryGridEnv(BaseEnvironment):
 
     def _on_y(self) -> bool:
         return self.y_pos is not None and np.array_equal(self.agent_pos, self.y_pos)
+
+    @staticmethod
+    def _manhattan(pos_a: np.ndarray, pos_b: np.ndarray) -> int:
+        return int(np.abs(pos_a - pos_b).sum())
 
 
 def play_rule_discovery_grid() -> None:

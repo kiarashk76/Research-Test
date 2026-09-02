@@ -25,7 +25,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import numpy as np
-from openai import OpenAI, APIConnectionError, APITimeoutError
+from openai import OpenAI, APIConnectionError, APITimeoutError, RateLimitError
 
 # {"role": ..., "content": ...} where content is a str (or a list of parts for images).
 Message = Dict[str, Any]
@@ -197,7 +197,20 @@ class LLMClient:
         is NOT retried. So we re-issue the whole call ourselves, up to
         ``max_retries`` times, concatenating the text deltas (the assembled
         string equals the non-streaming ``message.content``).
-        """
+
+        ``RateLimitError`` (429) gets the same manual retry, but with a
+        longer backoff (starting at 5s instead of 1s) -- a 429 becoming a
+        stream that then breaks mid-way is rare enough that this loop
+        mostly exists for *starting* a stream that gets 429'd, where the
+        SDK's own ``max_retries`` already applies its own (shorter)
+        backoff first; by the time that's exhausted and this except clause
+        sees it, a longer wait gives an actual rate limit (as opposed to a
+        depleted prepaid balance, which no amount of waiting fixes) a
+        better chance to have cleared. Doesn't distinguish the two --
+        there's no reliable way to tell them apart from the error alone --
+        so a truly exhausted balance just burns through the same longer
+        waits before giving up for good, same as before this existed,
+        only slower."""
         for attempt in range(self.max_retries + 1):
             try:
                 response = self._client.chat.completions.create(
@@ -217,9 +230,11 @@ class LLMClient:
                         parts.append(delta)
                 self._record_usage(usage)
                 return "".join(parts)
-            except (httpx.HTTPError, APIConnectionError, APITimeoutError) as e:
+            except (httpx.HTTPError, APIConnectionError, APITimeoutError, RateLimitError) as e:
                 if attempt == self.max_retries:
                     raise
+                is_rate_limit = isinstance(e, RateLimitError)
+                delay = 5 * (2 ** attempt) if is_rate_limit else 2 ** attempt
                 print(f"[LLMClient] stream failed ({type(e).__name__}), "
-                      f"retry {attempt + 1}/{self.max_retries}")
-                time.sleep(2 ** attempt)           # brief exponential backoff, then re-issue
+                      f"retry {attempt + 1}/{self.max_retries} in {delay}s")
+                time.sleep(delay)                  # exponential backoff, then re-issue

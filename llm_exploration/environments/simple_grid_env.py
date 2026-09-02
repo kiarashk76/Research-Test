@@ -19,6 +19,27 @@ ACTION_NAMES = {
     3: "right",
 }
 
+# Brief, environment-specific context for LLM prompts (see
+# core.environment.EnvironmentAdapter / core.prompts.resolve_environment_context)
+# -- kept abstract enough to not hand over exact mechanics the researcher is
+# meant to observe directly. This module-level OBSERVATION_SPACE_DESCRIPTION
+# is only a fallback -- SimpleGridEnv.__init__ sets a more precise,
+# size-aware instance hint (self.observation_space_description_hint) that
+# takes precedence; see there for why.
+ENVIRONMENT_DESCRIPTION = (
+    "A 2D grid-world environment containing an agent and a single goal marker. "
+    "The objective is to reach the goal in as few steps as possible."
+)
+
+OBSERVATION_SPACE_DESCRIPTION = (
+    "The observation is the entire grid as a 2D array; each cell holds a code for "
+    "what occupies it (empty space, the agent, or the goal)."
+)
+
+ACTION_SPACE_DESCRIPTION = (
+    "The action space is discrete and contains four movement actions: up, down, left, right."
+)
+
 # The shortest path from agent to goal must be strictly longer than this
 # many steps. On an obstacle-free grid, the shortest path always exists and
 # its length is just the Manhattan distance between agent and goal.
@@ -45,6 +66,21 @@ class SimpleGridEnv(BaseEnvironment):
             high=Y,
             shape=(self.size, self.size),
             dtype=np.int64,
+        )
+        # Instance-level, size-aware hint -- takes precedence over the
+        # static OBSERVATION_SPACE_DESCRIPTION module constant (see
+        # core.environment.EnvironmentAdapter's precedence order), so the
+        # LLM prompt states this session's *actual* grid size and code
+        # count in plain English instead of needing the raw Gym space repr
+        # (Box(0, 2, (size, size), int64)) as a crutch for that. Never
+        # states which code means which -- that's exactly what the
+        # researcher is meant to discover through interaction.
+        self.observation_space_description_hint = (
+            f"The observation is the entire grid as a {self.size}x{self.size} 2D array of "
+            "integers (one value per cell). Each cell's value is one of 3 possible codes "
+            "(0, 1, or 2) -- one code each for empty space, the agent, and the goal -- but "
+            "which code means which is not stated here; that must be discovered through "
+            "interaction."
         )
 
         self.agent_pos = np.zeros(2, dtype=np.int64)

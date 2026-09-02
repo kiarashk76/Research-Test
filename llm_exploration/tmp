@@ -1,0 +1,35 @@
+{
+"name": "Boulder River Crossing",
+
+"motivation": "The objective is to learn how to use boulders to cross the river. Some boulders are too heavy to move and should simply be ignored. Movable boulders should be positioned strategically in the river, alongside each other, so that they fill the entire width of the river and create a continuous traversable path across it.",
+
+"plan": "Identify nearby boulders and determine which ones can be moved. Ignore boulders that are too heavy to move. For each movable boulder, push it into the river and position it strategically. After moving each boulder into the river, explore toward the rightmost reachable tile of the game to discover the next target position where another boulder should be placed. Use this information to place subsequent boulders alongside the existing ones, progressively filling the entire width of the river and creating a continuous traversable path. Continue until the boulders form an effective crossing. Return 'Done' once the river has been filled sufficiently to enable crossing.",
+
+"execution_requirements": [
+    {
+        "name": "Boulder Discovery",
+        "description": "Identify nearby boulders that could potentially be used for crossing the river."
+    },
+    {
+        "name": "Movable Boulder Identification",
+        "description": "Determine which boulders can be moved. Ignore boulders that are too heavy to move."
+    },
+    {
+        "name": "Strategic Boulder Movement",
+        "description": "Push each movable boulder into the river and position it purposefully rather than moving it arbitrarily."
+    },
+    {
+        "name": "Next Target Discovery",
+        "description": "After moving each boulder into the river, explore toward the rightmost reachable tile of the game to discover the next target position for placing a boulder."
+    },
+    {
+        "name": "River Width Coverage",
+        "description": "Position boulders alongside each other so that they progressively fill the full width of the river and create a continuous traversable path."
+    },
+    {
+        "name": "River Crossing",
+        "description": "Use the strategically positioned boulders to establish a continuous path across the river."
+    }
+]
+
+}

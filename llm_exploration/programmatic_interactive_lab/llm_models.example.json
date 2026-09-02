@@ -1,0 +1,15 @@
+[
+  {
+    "name": "gemini-flash",
+    "model_name": "gemini-2.5-flash",
+    "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "api_key": "YOUR_API_KEY_HERE"
+  },
+  {
+    "name": "local-vllm",
+    "model_name": "Qwen2.5-7B-Instruct",
+    "url": "http://localhost:8000/v1",
+    "api_key": "not-needed",
+    "temperature": 0.2
+  }
+]

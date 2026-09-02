@@ -5,6 +5,14 @@ __pycache__/
 # Experiment outputs
 outputs/
 
+# Interactive Programmatic Policy Lab runtime data (SQLite DB + per-session artifacts)
+programmatic_interactive_lab/data/*
+!programmatic_interactive_lab/data/.gitkeep
+
+# Interactive Programmatic Policy Lab's user-managed LLM model registry --
+# holds API keys directly, see llm_models.example.json for the expected shape
+programmatic_interactive_lab/llm_models.json
+
 # Slurm logs
 logs/*
 

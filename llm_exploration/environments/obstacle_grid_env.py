@@ -21,6 +21,23 @@ ACTION_NAMES = {
     3: "right",
 }
 
+# Brief, environment-specific context for LLM prompts -- see
+# core.environment.EnvironmentAdapter / core.prompts.resolve_environment_context.
+ENVIRONMENT_DESCRIPTION = (
+    "A 2D grid-world environment containing an agent, a goal marker, and impassable "
+    "obstacles scattered across the grid. The objective is to reach the goal without "
+    "moving into an obstacle."
+)
+
+OBSERVATION_SPACE_DESCRIPTION = (
+    "The observation is the entire grid as a 2D array; each cell holds a code for "
+    "what occupies it (empty space, the agent, the goal, or an obstacle)."
+)
+
+ACTION_SPACE_DESCRIPTION = (
+    "The action space is discrete and contains four movement actions: up, down, left, right."
+)
+
 # The shortest path from agent to goal must be strictly longer than this
 # many steps, for both the initial (obstacle-free) and per-episode maps.
 MIN_PATH_LENGTH = 10
@@ -107,6 +124,20 @@ class ObstacleGridEnv(BaseEnvironment):
             high=OBSTACLE,
             shape=(self.size, self.size),
             dtype=np.int64,
+        )
+        # Instance-level, size-aware hint -- takes precedence over the
+        # static OBSERVATION_SPACE_DESCRIPTION module constant (see
+        # core.environment.EnvironmentAdapter's precedence order), so the
+        # LLM prompt states this session's actual grid size and code count
+        # in plain English instead of needing the raw Gym space repr as a
+        # crutch. Never states which code means which -- that's exactly
+        # what the researcher is meant to discover through interaction.
+        self.observation_space_description_hint = (
+            f"The observation is the entire grid as a {self.size}x{self.size} 2D array of "
+            "integers (one value per cell). Each cell's value is one of 4 possible codes "
+            "(0 through 3) -- one code each for empty space, the agent, the goal, and an "
+            "obstacle -- but which code means which is not stated here; that must be "
+            "discovered through interaction."
         )
 
         self.agent_pos = np.zeros(2, dtype=np.int64)
